@@ -8,16 +8,19 @@
 ```
 cd frontend
 npm install
+npm start
 ```
 
 # Backend
 ```
 cd backend
 npm install
+npm start
 ```
 
 # Python Server
 ```
 cd diagnoseModel/python
 python install
+python medical_server.py
 ```
