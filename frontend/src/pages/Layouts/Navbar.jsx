@@ -22,15 +22,26 @@ const Navbar = () => {
               Home
             </Link>
             <Link 
+              to="/language-selection" 
+              className="text-white font-semibold bg-[#12BC53] rounded-md w-16 h-6 text-center hover:text-black transition-colors"
+            >
+              Call
+            </Link>
+            <Link 
               to="/about" 
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
               About
             </Link>
 
-            {isAuthenticated ? (
+             {isAuthenticated ? (
               <>
-               
+                <Link 
+                  to="/analysis" 
+                  className="text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Analysis
+                </Link>
                 <Link 
                   to="/logout" 
                   className="px-4 py-2 bg-black text-white rounded-lg hover:bg-red-600 transition-colors"

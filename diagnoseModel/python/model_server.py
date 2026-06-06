@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 import re
 import os
-from typing import List, Dict
 import math
-import json
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI()
 
@@ -17,16 +17,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# AI Configuration with new Inference Client
-print("🚀 AI Medical Reasoning with Hugging Face Inference Client")
-HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "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")
 
-# Use the new serverless inference API
-USE_AI = True  # Set to False to use only rule-based system
-INFERENCE_API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-headers = {"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"} if HUGGINGFACE_TOKEN else {}
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL   = "llama-3.1-8b-instant"   
 
-# Rest of your specialty mapping code remains the same
+USE_AI = GROQ_API_KEY 
+
+
 CONDITION_TO_SPECIALTY = {
     "pancreatitis": "gastroenterologist", "gastroenteritis": "gastroenterologist",
     "stomach": "gastroenterologist", "digestive": "gastroenterologist",
@@ -35,59 +33,63 @@ CONDITION_TO_SPECIALTY = {
     "crohn": "gastroenterologist", "ulcer": "gastroenterologist",
     "nausea": "gastroenterologist", "vomiting": "gastroenterologist",
     "diarrhea": "gastroenterologist", "abdominal": "gastroenterologist",
-    
-    "heart": "cardiologist", "cardiac": "cardiologist", "chest pain": "cardiologist",
-    "hypertension": "cardiologist", "blood pressure": "cardiologist",
-    "palpitation": "cardiologist",
-    
+
+    "heart": "cardiologist", "cardiac": "cardiologist",
+    "chest pain": "cardiologist", "hypertension": "cardiologist",
+    "blood pressure": "cardiologist", "palpitation": "cardiologist",
+
     "asthma": "pulmonologist", "breathing": "pulmonologist", "lung": "pulmonologist",
     "respiratory": "pulmonologist", "pneumonia": "pulmonologist",
     "bronchitis": "pulmonologist", "cough": "pulmonologist",
-    
+
     "migraine": "neurologist", "seizure": "neurologist", "stroke": "neurologist",
-    "parkinson": "neurologist", "epilepsy": "neurologist", "nerve": "neurologist",
-    "headache": "neurologist",
-    
+    "parkinson": "neurologist", "epilepsy": "neurologist",
+    "nerve": "neurologist", "headache": "neurologist",
+
     "bone": "orthopedist", "fracture": "orthopedist", "joint": "orthopedist",
-    "arthritis": "orthopedist", "back pain": "orthopedist", "sprain": "orthopedist",
-    "body pain": "orthopedist", "body ache": "orthopedist",
-    
+    "arthritis": "orthopedist", "back pain": "orthopedist",
+    "sprain": "orthopedist", "body pain": "orthopedist", "body ache": "orthopedist",
+
     "skin": "dermatologist", "rash": "dermatologist", "acne": "dermatologist",
     "eczema": "dermatologist", "psoriasis": "dermatologist", "itching": "dermatologist",
-    
-    "kidney": "nephrologist", "uti": "urologist", "urinary": "urologist",
-    "bladder": "urologist",
-    
+
+    "kidney": "nephrologist", "uti": "urologist",
+    "urinary": "urologist", "bladder": "urologist",
+
     "diabetes": "endocrinologist", "thyroid": "endocrinologist",
     "hormone": "endocrinologist",
-    
+
     "ear": "ent-specialist", "nose": "ent-specialist", "throat": "ent-specialist",
     "sinus": "ent-specialist", "tonsil": "ent-specialist", "sore throat": "ent-specialist",
-    
+
     "eye": "ophthalmologist", "vision": "ophthalmologist", "cataract": "ophthalmologist",
-    
+
     "pregnancy": "gynecologist", "menstrual": "gynecologist", "pcos": "gynecologist",
-    
+
     "child": "pediatrician", "infant": "pediatrician", "baby": "pediatrician",
-    
+
     "fever": "general-physician", "fatigue": "general-physician",
     "tired": "general-physician", "weakness": "general-physician",
     "cold": "general-physician",
 }
 
-def detect_specialty(condition, symptoms):
-    combined_text = f"{condition} {symptoms}".lower()
+
+def detect_specialty(condition: str, symptoms: str) -> str:
+    combined = f"{condition} {symptoms}".lower()
     for keyword, specialty in CONDITION_TO_SPECIALTY.items():
-        if keyword in combined_text:
-            print(f"🎯 Detected specialty: {specialty} (keyword: {keyword})")
+        if keyword in combined:
+            print(f"🎯 Specialty detected: {specialty} (keyword: {keyword})")
             return specialty
-    print(f"🎯 Using default: general-physician")
+    print("🎯 Defaulting to general-physician")
     return "general-physician"
 
-def get_hospital_type_for_condition(condition, symptoms):
+
+def get_hospital_type_for_condition(condition: str, symptoms: str) -> str:
     combined = f"{condition} {symptoms}".lower()
-    emergency_keywords = ["emergency", "heart attack", "stroke", "severe", "critical", 
-                         "bleeding", "unconscious", "chest pain"]
+    emergency_keywords = [
+        "emergency", "heart attack", "stroke", "severe", "critical",
+        "bleeding", "unconscious", "chest pain",
+    ]
     if any(kw in combined for kw in emergency_keywords):
         return "emergency"
     if "cancer" in combined or "oncology" in combined:
@@ -96,183 +98,216 @@ def get_hospital_type_for_condition(condition, symptoms):
         return "surgical"
     return "general"
 
-# [Previous helper functions remain the same - copying from your code]
-def search_osm_doctors_progressive(lat, lon, specialty, city):
-    specialty_clean = specialty.replace("-", " ").lower()
-    radii = [1000, 5000, 10000, 20000, 30000]
-    
-    for radius in radii:
-        print(f"🔍 Searching doctors in {radius/1000}km radius...")
-        query = f"""
-        [out:json][timeout:25];
-        (
-          node["amenity"="doctors"](around:{radius},{lat},{lon});
-          way["amenity"="doctors"](around:{radius},{lat},{lon});
-          node["amenity"="clinic"](around:{radius},{lat},{lon});
-          way["amenity"="clinic"](around:{radius},{lat},{lon});
-          node["healthcare"="doctor"](around:{radius},{lat},{lon});
-          way["healthcare"="doctor"](around:{radius},{lat},{lon});
-          node["healthcare"="clinic"](around:{radius},{lat},{lon});
-          way["healthcare"="clinic"](around:{radius},{lat},{lon});
-          node["amenity"="hospital"]["emergency"!="yes"](around:{radius},{lat},{lon});
-          way["amenity"="hospital"]["emergency"!="yes"](around:{radius},{lat},{lon});
-        );
-        out body center tags 100;
-        """
-        
-        try:
-            url = "https://overpass-api.de/api/interpreter"
-            response = requests.post(url, data={"data": query}, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                doctors = process_osm_healthcare_data(data, lat, lon, specialty_clean, city)
-                
-                if doctors and len(doctors) >= 3:
-                    print(f"✅ Found {len(doctors)} healthcare facilities in {radius/1000}km")
-                    return doctors[:10]
-        
-        except Exception as e:
-            print(f"⚠️ OSM search error at {radius/1000}km: {e}")
-            continue
-    
-    print(f"❌ No doctors found in 30km radius")
+
+
+def calculate_distance(lat1, lon1, lat2, lon2) -> float:
+    R = 6371
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+         * math.sin(dlon / 2) ** 2)
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+def format_address(tags: dict, city: str = "") -> str:
+    parts = []
+    for key in ["addr:housenumber", "addr:street", "addr:suburb", "addr:city", "addr:postcode"]:
+        if tags.get(key):
+            parts.append(tags[key])
+    if not parts and city:
+        parts.append(city)
+    return ", ".join(parts) if parts else tags.get("addr:full", "Not Available")
+
+
+def _extract_coords(element: dict):
+    """Return (lat, lon) from an OSM element or None."""
+    if "lat" in element and "lon" in element:
+        return element["lat"], element["lon"]
+    if "center" in element:
+        return element["center"]["lat"], element["center"]["lon"]
     return None
 
-def process_osm_healthcare_data(data, user_lat, user_lon, specialty, city):
-    doctors = []
-    seen = set()
-    exclude_keywords = [
-        "nursing home", "old age", "care home", "retirement", 
-        "hospice", "maternity", "blood bank", "laboratory",
-        "diagnostic", "pharmacy", "medical store"
-    ]
-    
-    for element in data.get("elements", []):
-        tags = element.get("tags", {})
-        name = tags.get("name", "").strip()
-        
-        if not name or name.lower() in seen:
-            continue
-        
-        name_lower = name.lower()
-        if any(excl in name_lower for excl in exclude_keywords):
-            continue
-        
-        if "lat" in element and "lon" in element:
-            elem_lat, elem_lon = element["lat"], element["lon"]
-        elif "center" in element:
-            elem_lat, elem_lon = element["center"]["lat"], element["center"]["lon"]
-        else:
-            continue
-        
-        distance = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
-        
-        amenity = tags.get("amenity", "")
-        healthcare = tags.get("healthcare", "")
-        healthcare_specialty = tags.get("healthcare:speciality", specialty).title()
-        
-        facility_type = "Clinic"
-        if amenity == "hospital":
-            facility_type = "Hospital"
-        elif amenity == "doctors" or healthcare == "doctor":
-            facility_type = "Doctor"
-        
-        phone = tags.get("phone") or tags.get("contact:phone") or "Not Available"
-        address = format_address(tags, city)
-        
-        doctors.append({
-            "name": name,
-            "specialty": healthcare_specialty,
-            "experience": "Not Available",
-            "location": address,
-            "qualifications": "Healthcare Provider",
-            "phone": phone,
-            "type": "doctor",
-            "distance": f"{distance:.1f} km",
-            "facility_type": facility_type,
-            "coordinates": {"lat": elem_lat, "lon": elem_lon}
-        })
-        
-        seen.add(name.lower())
-    
-    return sorted(doctors, key=lambda x: float(x["distance"].split()[0]))
 
-def search_hospitals_progressive(lat, lon, hospital_type="general"):
-    radii = [5000, 10000, 20000, 30000]
-    
-    for radius in radii:
-        print(f"🏥 Searching hospitals in {radius/1000}km radius...")
-        query = f"""
-        [out:json][timeout:25];
-        (
-          node["amenity"="hospital"](around:{radius},{lat},{lon});
-          way["amenity"="hospital"](around:{radius},{lat},{lon});
-          relation["amenity"="hospital"](around:{radius},{lat},{lon});
-        );
-        out body center tags 50;
-        """
-        
-        try:
-            url = "https://overpass-api.de/api/interpreter"
-            response = requests.post(url, data={"data": query}, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                hospitals = process_hospital_data(data, lat, lon, hospital_type)
-                
-                if hospitals and len(hospitals) >= 3:
-                    print(f"✅ Found {len(hospitals)} hospitals in {radius/1000}km")
-                    return hospitals[:10]
-        
-        except Exception as e:
-            print(f"⚠️ Hospital search error: {e}")
-            continue
-    
+def get_city_from_coordinates(lat: float, lon: float) -> str:
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json", "zoom": 10},
+            headers={"User-Agent": "MedicalAssistantApp/2.0"},
+            timeout=10,
+        )
+        addr = resp.json().get("address", {})
+        city = (addr.get("city") or addr.get("town") or addr.get("village")
+                or addr.get("county") or addr.get("state_district") or "Unknown Location")
+        print(f"📍 Location resolved: {city}")
+        return city
+    except Exception as e:
+        print(f"⚠️ Reverse geocoding error: {e}")
+        return "Unknown Location"
+
+
+
+OSM_URL = "https://overpass-api.de/api/interpreter"
+OSM_TIMEOUT = 15
+
+EXCLUDE_KEYWORDS = [
+    "nursing home", "old age", "care home", "retirement",
+    "hospice", "maternity", "blood bank", "laboratory",
+    "diagnostic", "pharmacy", "medical store",
+]
+
+
+def _osm_post(query: str) -> dict | None:
+    try:
+        headers = {"User-Agent": "MedicalAssistantApp/2.0"}
+        resp = requests.post(OSM_URL, data={"data": query}, headers=headers, timeout=OSM_TIMEOUT)
+        if resp.status_code == 200:
+            return resp.json()
+        print(f"⚠️ OSM returned {resp.status_code}")
+    except Exception as e:
+        print(f"⚠️ OSM request error: {e}")
+    return None
+
+
+def search_osm_doctors_progressive(lat, lon, specialty, city) -> list:
+    specialty_clean = specialty.replace("-", " ").lower()
+    radius = 15_000
+    print(f"🔍 Searching doctors within {radius/1000:.0f} km …")
+
+    query = f"""
+    [out:json][timeout:{OSM_TIMEOUT}];
+    (
+      node["amenity"="doctors"](around:{radius},{lat},{lon});
+      way["amenity"="doctors"](around:{radius},{lat},{lon});
+      node["amenity"="clinic"](around:{radius},{lat},{lon});
+      way["amenity"="clinic"](around:{radius},{lat},{lon});
+      node["healthcare"="doctor"](around:{radius},{lat},{lon});
+      way["healthcare"="doctor"](around:{radius},{lat},{lon});
+      node["healthcare"="clinic"](around:{radius},{lat},{lon});
+      way["healthcare"="clinic"](around:{radius},{lat},{lon});
+      node["amenity"="hospital"]["emergency"!="yes"](around:{radius},{lat},{lon});
+      way["amenity"="hospital"]["emergency"!="yes"](around:{radius},{lat},{lon});
+    );
+    out body center tags 100;
+    """
+
+    data = _osm_post(query)
+    if data:
+        doctors = _process_doctors(data, lat, lon, specialty_clean, city)
+        if doctors:
+            print(f"✅ Found {len(doctors)} healthcare facilities")
+            return doctors[:10]
+
+    print("❌ No doctors found")
     return []
 
-def process_hospital_data(data, user_lat, user_lon, hospital_type):
-    hospitals = []
-    seen = set()
-    
-    for element in data.get("elements", []):
-        tags = element.get("tags", {})
+
+def _process_doctors(data, user_lat, user_lon, specialty, city) -> list:
+    doctors = []
+    seen: set[str] = set()
+
+    for el in data.get("elements", []):
+        tags = el.get("tags", {})
         name = tags.get("name", "").strip()
-        
         if not name or name.lower() in seen:
             continue
-        
-        if "lat" in element and "lon" in element:
-            elem_lat, elem_lon = element["lat"], element["lon"]
-        elif "center" in element:
-            elem_lat, elem_lon = element["center"]["lat"], element["center"]["lon"]
-        else:
+        if any(kw in name.lower() for kw in EXCLUDE_KEYWORDS):
             continue
-        
-        if hospital_type == "emergency":
-            if tags.get("emergency") != "yes":
-                continue
-        
-        distance = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
-        
+
+        coords = _extract_coords(el)
+        if coords is None:
+            continue
+        elem_lat, elem_lon = coords
+
+        dist = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
+        amenity    = tags.get("amenity", "")
+        healthcare = tags.get("healthcare", "")
+        hc_spec    = tags.get("healthcare:speciality", specialty).title()
+
+        if amenity == "hospital":
+            ftype = "Hospital"
+        elif amenity == "doctors" or healthcare == "doctor":
+            ftype = "Doctor"
+        else:
+            ftype = "Clinic"
+
+        doctors.append({
+            "name": name,
+            "specialty": hc_spec,
+            "experience": "Not Available",
+            "location": format_address(tags, city),
+            "qualifications": "Healthcare Provider",
+            "phone": tags.get("phone") or tags.get("contact:phone") or "Not Available",
+            "type": "doctor",
+            "distance": f"{dist:.1f} km",
+            "facility_type": ftype,
+            "coordinates": {"lat": elem_lat, "lon": elem_lon},
+        })
+        seen.add(name.lower())
+
+    return sorted(doctors, key=lambda x: float(x["distance"].split()[0]))
+
+
+def search_hospitals_progressive(lat, lon, hospital_type="general") -> list:
+    radius = 20_000
+    print(f"🏥 Searching hospitals within {radius/1000:.0f} km …")
+
+    query = f"""
+    [out:json][timeout:{OSM_TIMEOUT}];
+    (
+      node["amenity"="hospital"](around:{radius},{lat},{lon});
+      way["amenity"="hospital"](around:{radius},{lat},{lon});
+      relation["amenity"="hospital"](around:{radius},{lat},{lon});
+    );
+    out body center tags 50;
+    """
+
+    data = _osm_post(query)
+    if data:
+        hospitals = _process_hospitals(data, lat, lon, hospital_type)
+        if hospitals:
+            print(f"✅ Found {len(hospitals)} hospitals")
+            return hospitals[:10]
+    return []
+
+
+def _process_hospitals(data, user_lat, user_lon, hospital_type) -> list:
+    hospitals = []
+    seen: set[str] = set()
+
+    for el in data.get("elements", []):
+        tags = el.get("tags", {})
+        name = tags.get("name", "").strip()
+        if not name or name.lower() in seen:
+            continue
+
+        coords = _extract_coords(el)
+        if coords is None:
+            continue
+        elem_lat, elem_lon = coords
+
+        # Filter for emergency hospitals only when required
+        if hospital_type == "emergency" and tags.get("emergency") != "yes":
+            continue
+
+        dist = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
         hospitals.append({
             "name": name,
             "address": format_address(tags),
             "phone": tags.get("phone") or tags.get("contact:phone") or "Not Available",
-            "distance": f"{distance:.1f} km",
+            "distance": f"{dist:.1f} km",
             "emergency": tags.get("emergency", "no"),
-            "coordinates": {"lat": elem_lat, "lon": elem_lon}
+            "coordinates": {"lat": elem_lat, "lon": elem_lon},
         })
-        
         seen.add(name.lower())
-    
+
     return sorted(hospitals, key=lambda x: float(x["distance"].split()[0]))
 
-def search_pharmacies_progressive(lat, lon):
-    radii = [2000, 5000, 10000, 20000]
-    
-    for radius in radii:
-        print(f"💊 Searching pharmacies in {radius/1000}km radius...")
+
+def search_pharmacies_progressive(lat, lon) -> list:
+    for radius in [2_000, 5_000, 10_000, 20_000]:
+        print(f"💊 Searching pharmacies within {radius/1000:.0f} km …")
         query = f"""
         [out:json][timeout:20];
         (
@@ -283,62 +318,46 @@ def search_pharmacies_progressive(lat, lon):
         );
         out body center tags 30;
         """
-        
-        try:
-            url = "https://overpass-api.de/api/interpreter"
-            response = requests.post(url, data={"data": query}, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                pharmacies = process_pharmacy_data(data, lat, lon)
-                
-                if pharmacies and len(pharmacies) >= 3:
-                    print(f"✅ Found {len(pharmacies)} pharmacies in {radius/1000}km")
-                    return pharmacies[:8]
-        
-        except Exception as e:
-            print(f"⚠️ Pharmacy search error: {e}")
-            continue
-    
+        data = _osm_post(query)
+        if data:
+            pharmacies = _process_pharmacies(data, lat, lon)
+            if len(pharmacies) >= 3:
+                print(f"✅ Found {len(pharmacies)} pharmacies")
+                return pharmacies[:8]
     return []
 
-def process_pharmacy_data(data, user_lat, user_lon):
+
+def _process_pharmacies(data, user_lat, user_lon) -> list:
     pharmacies = []
-    seen = set()
-    
-    for element in data.get("elements", []):
-        tags = element.get("tags", {})
+    seen: set[str] = set()
+
+    for el in data.get("elements", []):
+        tags = el.get("tags", {})
         name = tags.get("name", "").strip()
-        
         if not name or name.lower() in seen:
             continue
-        
-        if "lat" in element and "lon" in element:
-            elem_lat, elem_lon = element["lat"], element["lon"]
-        elif "center" in element:
-            elem_lat, elem_lon = element["center"]["lat"], element["center"]["lon"]
-        else:
+
+        coords = _extract_coords(el)
+        if coords is None:
             continue
-        
-        distance = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
-        
+        elem_lat, elem_lon = coords
+
+        dist = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
         pharmacies.append({
             "name": name,
             "address": format_address(tags),
             "phone": tags.get("phone") or tags.get("contact:phone") or "Not Available",
-            "distance": f"{distance:.1f} km",
-            "coordinates": {"lat": elem_lat, "lon": elem_lon}
+            "distance": f"{dist:.1f} km",
+            "coordinates": {"lat": elem_lat, "lon": elem_lon},
         })
-        
         seen.add(name.lower())
-    
+
     return sorted(pharmacies, key=lambda x: float(x["distance"].split()[0]))
 
-def search_ambulance_progressive(lat, lon):
-    radii = [10000, 20000, 30000]
-    
-    for radius in radii:
-        print(f"🚑 Searching ambulances in {radius/1000}km radius...")
+
+def search_ambulance_progressive(lat, lon) -> list:
+    for radius in [10_000, 20_000, 30_000]:
+        print(f"🚑 Searching ambulances within {radius/1000:.0f} km …")
         query = f"""
         [out:json][timeout:20];
         (
@@ -351,318 +370,273 @@ def search_ambulance_progressive(lat, lon):
         );
         out body center tags 20;
         """
-        
-        try:
-            url = "https://overpass-api.de/api/interpreter"
-            response = requests.post(url, data={"data": query}, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                ambulances = process_ambulance_data(data, lat, lon)
-                
-                if ambulances and len(ambulances) >= 2:
-                    print(f"✅ Found {len(ambulances)} ambulance services")
-                    return ambulances[:5]
-        
-        except Exception as e:
-            print(f"⚠️ Ambulance search error: {e}")
-            continue
-    
+        data = _osm_post(query)
+        if data:
+            ambulances = _process_ambulances(data, lat, lon)
+            if len(ambulances) >= 2:
+                print(f"✅ Found {len(ambulances)} ambulance services")
+                return ambulances[:5]
     return []
 
-def process_ambulance_data(data, user_lat, user_lon):
+
+def _process_ambulances(data, user_lat, user_lon) -> list:
     services = []
-    seen = set()
-    
-    for element in data.get("elements", []):
-        tags = element.get("tags", {})
+    seen: set[str] = set()
+
+    for el in data.get("elements", []):
+        tags = el.get("tags", {})
         name = tags.get("name", "Ambulance Service")
-        
         if name.lower() in seen:
             continue
-        
-        if "lat" in element and "lon" in element:
-            elem_lat, elem_lon = element["lat"], element["lon"]
-        elif "center" in element:
-            elem_lat, elem_lon = element["center"]["lat"], element["center"]["lon"]
-        else:
+
+        coords = _extract_coords(el)
+        if coords is None:
             continue
-        
-        distance = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
-        
+        elem_lat, elem_lon = coords
+
+        dist = calculate_distance(user_lat, user_lon, elem_lat, elem_lon)
         services.append({
             "name": name,
             "address": format_address(tags),
-            "phone": tags.get("phone") or tags.get("emergency:phone") or tags.get("contact:phone") or "108 (Emergency)",
-            "distance": f"{distance:.1f} km",
-            "coordinates": {"lat": elem_lat, "lon": elem_lon}
+            "phone": (tags.get("phone") or tags.get("emergency:phone")
+                      or tags.get("contact:phone") or "108 (Emergency)"),
+            "distance": f"{dist:.1f} km",
+            "coordinates": {"lat": elem_lat, "lon": elem_lon},
         })
-        
         seen.add(name.lower())
-    
+
     return sorted(services, key=lambda x: float(x["distance"].split()[0]))
 
-def get_city_from_coordinates(lat, lon):
-    try:
-        url = "https://nominatim.openstreetmap.org/reverse"
-        params = {
-            "lat": lat,
-            "lon": lon,
-            "format": "json",
-            "zoom": 10
-        }
-        headers = {
-            "User-Agent": "MedicalAssistantApp/2.0"
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        data = response.json()
-        
-        address = data.get("address", {})
-        city = (address.get("city") or 
-                address.get("town") or 
-                address.get("village") or 
-                address.get("county") or 
-                address.get("state_district") or
-                "Unknown Location")
-        
-        print(f"📍 Location: {city}")
-        return city
-    
-    except Exception as e:
-        print(f"⚠️ Reverse geocoding error: {e}")
-        return "Unknown Location"
 
-def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371
-    lat1_rad = math.radians(lat1)
-    lat2_rad = math.radians(lat2)
-    delta_lat = math.radians(lat2 - lat1)
-    delta_lon = math.radians(lon2 - lon1)
-    
-    a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
-    c = 2 * math.asin(math.sqrt(a))
-    
-    return R * c
-
-def format_address(tags, city=""):
-    parts = []
-    for key in ["addr:housenumber", "addr:street", "addr:suburb", "addr:city", "addr:postcode"]:
-        if tags.get(key):
-            parts.append(tags[key])
-    
-    if not parts and city:
-        parts.append(city)
-    
-    return ", ".join(parts) if parts else tags.get("addr:full", "Not Available")
-
-# SIMPLIFIED AI DIAGNOSIS - Single reliable model
-def get_ai_diagnosis(symptoms: str):
+# ─────────────────────────────────────────────
+# AI Diagnosis  (Groq — free tier)
+# ─────────────────────────────────────────────
+def get_ai_diagnosis(symptoms: str) -> str:
     """
-    Simple AI diagnosis using Hugging Face Inference API
+    Call Groq's free API (llama3-8b-8192).
+    Get a free key at https://console.groq.com → API Keys.
     """
     if not USE_AI:
-        raise Exception("AI disabled")
-    
-    # Simple, clear prompt for better results
-    prompt = f"""You are a medical assistant. Patient symptoms: {symptoms}
+        raise RuntimeError("AI disabled: set GROQ_API_KEY env variable")
 
-Diagnosis format:
-Condition: [likely condition]
-Severity: [low/moderate/high]  
-Advice: [brief care instructions]
-Warning: [when to see doctor]"""
+    system_prompt = (
+        "You are a professional medical assistant. "
+        "Analyze the patient's symptoms and respond ONLY in this exact plain-text format "
+        "(no markdown, no asterisks, no bullet points, no extra text):\n\n"
+        "Condition: <likely condition>\n"
+        "Severity: <low|moderate|high>\n"
+        "Advice: <brief care instructions and home remedies>\n"
+        "Warning: <when to see a doctor or seek emergency care>"
+    )
 
-    print("🤖 Querying AI model...")
-    
-    try:
-        response = requests.post(
-            INFERENCE_API_URL,
-            headers=headers,
-            json={
-                "inputs": prompt,
-                "parameters": {
-                    "max_length": 200,
-                    "temperature": 0.7,
-                    "do_sample": True
-                }
-            },
-            timeout=15
-        )
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": f"Symptoms: {symptoms}"},
+        ],
+        "max_tokens": 300,
+        "temperature": 0.2,
+    }
 
-        if response.status_code == 200:
-            result = response.json()
-            
-            # Parse response
-            if isinstance(result, list) and len(result) > 0:
-                text = result[0].get("generated_text", "")
-            elif isinstance(result, dict):
-                text = result.get("generated_text", result.get("text", ""))
-            else:
-                text = ""
+    print("🤖 Querying Groq (llama3-8b-8192) …")
+    resp = requests.post(
+        GROQ_API_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=20,
+    )
 
-            if text and len(text) > 10:
-                print("✅ AI response received")
-                return text
-            else:
-                raise Exception("Empty AI response")
-        else:
-            print(f"⚠️ API error: {response.status_code}")
-            raise Exception(f"API returned {response.status_code}")
-            
-    except Exception as e:
-        print(f"⚠️ AI request failed: {e}")
-        raise
+    if resp.status_code != 200:
+        raise RuntimeError(f"Groq API error {resp.status_code}: {resp.text}")
 
-def analyze_symptoms_fallback(symptoms):
-    """Enhanced rule-based fallback system"""
-    symptoms_lower = symptoms.lower()
-    
-    if any(word in symptoms_lower for word in ['chest pain', 'heart attack', 'stroke', 'bleeding heavily', 
-                                                  'can\'t breathe', 'severe bleeding', 'unconscious']):
+    text = resp.json()["choices"][0]["message"]["content"].strip()
+    if not text:
+        raise RuntimeError("Empty response from Groq")
+
+    print("✅ AI response received")
+    return text
+
+
+# ─────────────────────────────────────────────
+# Rule-based fallback
+# ─────────────────────────────────────────────
+def analyze_symptoms_fallback(symptoms: str) -> dict:
+    s = symptoms.lower()
+
+    if any(w in s for w in ["chest pain", "heart attack", "stroke",
+                             "bleeding heavily", "can't breathe",
+                             "severe bleeding", "unconscious"]):
         return {
             "condition": "Emergency Medical Situation",
             "severity": "high",
             "advice": "Call emergency services immediately. Do not drive yourself. Keep calm and stay still.",
-            "doctor_note": "Seek immediate emergency care. Call ambulance or visit ER now."
+            "doctor_note": "Seek immediate emergency care. Call 108 or visit ER now.",
         }
-    
-    elif any(word in symptoms_lower for word in ['high fever', 'persistent vomiting', 'severe pain', 
-                                                    'difficulty breathing', 'severe headache']):
+
+    if any(w in s for w in ["high fever", "persistent vomiting", "severe pain",
+                             "difficulty breathing", "severe headache"]):
         return {
             "condition": "Acute Illness Requiring Medical Attention",
             "severity": "high",
-            "advice": "Rest immediately. Stay hydrated. Monitor temperature. Avoid solid foods if vomiting.",
-            "doctor_note": "See a doctor today or visit urgent care within 4-6 hours."
+            "advice": "Rest immediately. Stay hydrated. Avoid solid foods if vomiting.",
+            "doctor_note": "See a doctor today or visit urgent care within 4-6 hours.",
         }
-    
-    elif any(word in symptoms_lower for word in ['fever', 'temperature', 'chills']):
+
+    if any(w in s for w in ["fever", "temperature", "chills"]):
         return {
             "condition": "Possible Fever or Viral Infection",
             "severity": "moderate",
-            "advice": "Drink plenty of water and fluids. Take rest. Use cool compress. Monitor temperature every 4 hours.",
-            "doctor_note": "See a doctor if fever persists beyond 3 days or exceeds 103°F (39.4°C)."
+            "advice": "Drink plenty of fluids. Rest. Use cool compress. Monitor temperature every 4 hours.",
+            "doctor_note": "See a doctor if fever exceeds 39.4°C or lasts beyond 3 days.",
         }
-    
-    elif any(word in symptoms_lower for word in ['stomach', 'nausea', 'vomiting', 'diarrhea', 'upset stomach']):
+
+    if any(w in s for w in ["stomach", "nausea", "vomiting", "diarrhea", "upset stomach"]):
         return {
             "condition": "Gastroenteritis or Digestive Issue",
             "severity": "moderate",
-            "advice": "Stay hydrated with ORS or electrolyte drinks. Avoid spicy and oily foods. Eat bland foods like rice, banana. Rest well.",
-            "doctor_note": "See a doctor if symptoms persist for more than 48 hours or if you notice blood."
+            "advice": "Hydrate with ORS. Eat bland foods (rice, banana). Avoid spicy/oily food. Rest.",
+            "doctor_note": "See a doctor if symptoms persist >48 hours or blood is present.",
         }
-    
-    elif any(word in symptoms_lower for word in ['cough', 'cold', 'sore throat', 'runny nose', 'congestion']):
+
+    if any(w in s for w in ["cough", "cold", "sore throat", "runny nose", "congestion"]):
         return {
-            "condition": "Upper Respiratory Tract Infection or Common Cold",
+            "condition": "Upper Respiratory Infection or Common Cold",
             "severity": "low",
-            "advice": "Drink warm liquids like tea or soup. Get adequate rest. Use steam inhalation. Stay warm and avoid cold exposure.",
-            "doctor_note": "See a doctor if symptoms worsen after 5-7 days or if breathing becomes difficult."
+            "advice": "Drink warm liquids. Rest. Steam inhalation helps. Stay warm.",
+            "doctor_note": "See a doctor if symptoms worsen after 5-7 days or breathing becomes difficult.",
         }
-    
-    elif any(word in symptoms_lower for word in ['headache', 'head pain', 'migraine']):
+
+    if any(w in s for w in ["headache", "head pain", "migraine"]):
         return {
             "condition": "Headache or Tension-type Pain",
             "severity": "low",
-            "advice": "Rest in a quiet, dark room. Stay hydrated. Apply cool compress to forehead. Avoid screens and bright lights.",
-            "doctor_note": "See a doctor if headache is severe, persistent, or accompanied by vision changes."
+            "advice": "Rest in a dark, quiet room. Stay hydrated. Cool compress on forehead.",
+            "doctor_note": "See a doctor if severe, persistent, or with vision changes.",
         }
-    
-    elif any(word in symptoms_lower for word in ['tired', 'fatigue', 'body pain', 'weakness', 'body ache']):
+
+    if any(w in s for w in ["tired", "fatigue", "body pain", "weakness", "body ache"]):
         return {
             "condition": "General Fatigue or Body Ache",
             "severity": "low",
-            "advice": "Get proper rest and sleep. Stay hydrated. Eat nutritious meals. Light stretching may help. Avoid overexertion.",
-            "doctor_note": "See a doctor if fatigue persists for more than 2 weeks or worsens significantly."
-        }
-    
-    else:
-        return {
-            "condition": "General Health Concern",
-            "severity": "low",
-            "advice": "Monitor your symptoms. Stay hydrated. Get adequate rest. Maintain a balanced diet. Avoid stress.",
-            "doctor_note": "See a doctor if symptoms persist or worsen over the next few days."
+            "advice": "Get rest. Stay hydrated. Eat nutritious meals. Light stretching may help.",
+            "doctor_note": "See a doctor if fatigue persists for more than 2 weeks.",
         }
 
+    return {
+        "condition": "General Health Concern",
+        "severity": "low",
+        "advice": "Monitor your symptoms. Stay hydrated. Get adequate rest.",
+        "doctor_note": "See a doctor if symptoms persist or worsen.",
+    }
+
+
+# ─────────────────────────────────────────────
+# Parse AI text into structured fields
+# ─────────────────────────────────────────────
+def parse_ai_response(text: str) -> dict:
+    # Strip markdown noise
+    cleaned = re.sub(r"[*#`]", "", text).strip()
+
+    condition_m = re.search(r"Condition:\s*(.+)", cleaned, re.IGNORECASE)
+    severity_m  = re.search(r"Severity:\s*(low|moderate|high)", cleaned, re.IGNORECASE)
+    advice_m    = re.search(r"Advice:\s*(.+?)(?:\nWarning:|\Z)", cleaned, re.IGNORECASE | re.DOTALL)
+    warning_m   = re.search(r"Warning:\s*(.+)", cleaned, re.IGNORECASE | re.DOTALL)
+
+    if not (condition_m and severity_m and advice_m):
+        raise ValueError(f"Could not parse AI response: {cleaned[:200]}")
+
+    return {
+        "condition":   condition_m.group(1).strip(),
+        "severity":    severity_m.group(1).strip().lower(),
+        "advice":      advice_m.group(1).strip(),
+        "doctor_note": warning_m.group(1).strip() if warning_m else "Consult a doctor if symptoms persist.",
+    }
+
+
+# ─────────────────────────────────────────────
+# Main endpoint
+# ─────────────────────────────────────────────
 @app.post("/api/diagnose")
 async def diagnose(request: Request):
-    data = await request.json()
+    data    = await request.json()
     symptoms = data.get("symptoms", "").strip()
-    lat = data.get("latitude")
-    lon = data.get("longitude")
+    lat      = data.get("latitude")
+    lon      = data.get("longitude")
 
     if not symptoms:
         return {"error": "Please describe your symptoms."}
 
-    # Try AI diagnosis first, fallback to rule-based
+    # ── Diagnosis ──
+    condition = severity = advice = doctor_note = None
+    city = "Unknown"
+
     try:
-        ai_response = get_ai_diagnosis(symptoms)
-        
-        condition_match = re.search(r'Condition:\s*(.+?)(?:\n|Severity:)', ai_response, re.IGNORECASE)
-        severity_match = re.search(r'Severity:\s*(low|moderate|high)', ai_response, re.IGNORECASE)
-        advice_match = re.search(r'Advice:\s*(.+?)(?:\n|Warning:|$)', ai_response, re.IGNORECASE | re.DOTALL)
-        warning_match = re.search(r'Warning:\s*(.+?)$', ai_response, re.IGNORECASE | re.DOTALL)
-        
-        if not (condition_match and severity_match and advice_match):
-            raise ValueError("AI response parsing failed")
-        
-        condition = condition_match.group(1).strip()
-        severity = severity_match.group(1).strip().lower()
-        advice = advice_match.group(1).strip()
-        doctor_note = warning_match.group(1).strip() if warning_match else "Consult a doctor if symptoms persist."
-        
-        print("✅ Using AI diagnosis")
-        
+        raw = get_ai_diagnosis(symptoms)
+        parsed = parse_ai_response(raw)
+        condition   = parsed["condition"]
+        severity    = parsed["severity"]
+        advice      = parsed["advice"]
+        doctor_note = parsed["doctor_note"]
+        print("✅ AI diagnosis used")
     except Exception as e:
-        print(f"⚠️ AI diagnosis failed, using rule-based fallback: {e}")
-        analysis = analyze_symptoms_fallback(symptoms)
-        condition = analysis["condition"]
-        severity = analysis["severity"]
-        advice = analysis["advice"]
-        doctor_note = analysis["doctor_note"]
-        print("✅ Using rule-based diagnosis")
+        print(f"⚠️ AI failed ({e}), using rule-based fallback")
+        fb          = analyze_symptoms_fallback(symptoms)
+        condition   = fb["condition"]
+        severity    = fb["severity"]
+        advice      = fb["advice"]
+        doctor_note = fb["doctor_note"]
+        print("✅ Rule-based diagnosis used")
 
-    specialty = detect_specialty(condition, symptoms)
+    specialty     = detect_specialty(condition, symptoms)
     hospital_type = get_hospital_type_for_condition(condition, symptoms)
-    
-    print(f"📋 Diagnosis: {condition}")
-    print(f"🎯 Required specialty: {specialty}")
-    print(f"🏥 Hospital type: {hospital_type}")
 
-    suggestion = f"You have {condition} and it is {severity} severity. My suggestion is: {advice} {doctor_note}"
+    print(f"📋 Condition: {condition} | Severity: {severity} | Specialty: {specialty}")
 
-    nearby = {}
-    if lat and lon:
+    suggestion = (
+        f"You likely have {condition} ({severity} severity). "
+        f"{advice} {doctor_note}"
+    )
+
+    # ── Nearby services ──
+    nearby: dict = {}
+
+    if lat is not None and lon is not None:
         city = get_city_from_coordinates(lat, lon)
-        
+
         if severity == "high":
-            print("🚨 HIGH SEVERITY - Searching all emergency services...")
-            nearby["doctors"] = search_osm_doctors_progressive(lat, lon, specialty, city)
-            nearby["hospitals"] = search_hospitals_progressive(lat, lon, hospital_type)
+            print("🚨 HIGH — searching all emergency services …")
+            nearby["doctors"]            = search_osm_doctors_progressive(lat, lon, specialty, city)
+            nearby["hospitals"]          = search_hospitals_progressive(lat, lon, hospital_type)
             nearby["ambulance_services"] = search_ambulance_progressive(lat, lon)
-            nearby["pharmacies"] = search_pharmacies_progressive(lat, lon)
-            
+            nearby["pharmacies"]         = search_pharmacies_progressive(lat, lon)
+
         elif severity == "moderate":
-            print("⚠️ MODERATE SEVERITY - Searching doctors and pharmacies...")
-            nearby["doctors"] = search_osm_doctors_progressive(lat, lon, specialty, city)
-            nearby["pharmacies"] = search_pharmacies_progressive(lat, lon)
+            print("⚠️ MODERATE — searching doctors, hospitals, pharmacies …")
+            nearby["doctors"]   = search_osm_doctors_progressive(lat, lon, specialty, city)
             nearby["hospitals"] = search_hospitals_progressive(lat, lon, hospital_type)
-            
-        else:
-            print("✅ LOW SEVERITY - Searching doctors and pharmacies...")
             nearby["pharmacies"] = search_pharmacies_progressive(lat, lon)
-            nearby["doctors"] = search_osm_doctors_progressive(lat, lon, specialty, city)
-        
+
+        else:
+            print("✅ LOW — searching doctors and pharmacies …")
+            nearby["doctors"]    = search_osm_doctors_progressive(lat, lon, specialty, city)
+            nearby["pharmacies"] = search_pharmacies_progressive(lat, lon)
+
+        # Remove empty lists
         nearby = {k: v for k, v in nearby.items() if v}
 
     return {
         "suggestion": suggestion,
-        "severity": severity,
-        "specialty": specialty,
-        "condition": condition,
-        "city": city if lat and lon else "Unknown",
-        "nearby": nearby
+        "severity":   severity,
+        "specialty":  specialty,
+        "condition":  condition,
+        "city":       city,
+        "nearby":     nearby,
     }
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -200,7 +200,16 @@ const DetailCard = () => {
               </h3>
               <div className="space-y-2">
                 {nearby.doctors.map((doctor, idx) => (
-                  <div key={idx} className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 hover:shadow-md transition-shadow">
+                  <a
+                    key={idx}
+                    href={doctor.coordinates 
+                      ? `https://www.google.com/maps/search/?api=1&query=${doctor.coordinates.lat},${doctor.coordinates.lon}`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(doctor.name + ' ' + (doctor.location || ''))}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-emerald-50 p-3 rounded-xl border border-emerald-100 hover:border-emerald-300 hover:shadow-md transition-shadow cursor-pointer"
+                  >
                     <p className="font-semibold text-gray-900 text-sm mb-1">{doctor.name}</p>
                     <p className="text-xs text-emerald-700 font-medium mb-1">{doctor.specialty}</p>
                     {doctor.experience && doctor.experience !== "Not Available" && (
@@ -226,7 +235,7 @@ const DetailCard = () => {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>
@@ -240,7 +249,16 @@ const DetailCard = () => {
               </h3>
               <div className="space-y-2">
                 {nearby.hospitals.map((hospital, idx) => (
-                  <div key={idx} className="bg-blue-50 p-3 rounded-xl border border-blue-100 hover:shadow-md transition-shadow">
+                  <a
+                    key={idx}
+                    href={hospital.coordinates 
+                      ? `https://www.google.com/maps/search/?api=1&query=${hospital.coordinates.lat},${hospital.coordinates.lon}`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hospital.name + ' ' + (hospital.address || ''))}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-blue-50 p-3 rounded-xl border border-blue-100 hover:border-blue-300 hover:shadow-md transition-shadow cursor-pointer"
+                  >
                     <p className="font-semibold text-gray-900 text-sm mb-1">{hospital.name}</p>
                     <div className="space-y-1">
                       {hospital.address && hospital.address !== "Not Available" && (
@@ -259,7 +277,7 @@ const DetailCard = () => {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>
@@ -273,7 +291,16 @@ const DetailCard = () => {
               </h3>
               <div className="space-y-2">
                 {nearby.pharmacies.map((pharmacy, idx) => (
-                  <div key={idx} className="bg-purple-50 p-3 rounded-xl border border-purple-100 hover:shadow-md transition-shadow">
+                  <a
+                    key={idx}
+                    href={pharmacy.coordinates 
+                      ? `https://www.google.com/maps/search/?api=1&query=${pharmacy.coordinates.lat},${pharmacy.coordinates.lon}`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pharmacy.name + ' ' + (pharmacy.address || ''))}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-purple-50 p-3 rounded-xl border border-purple-100 hover:border-purple-300 hover:shadow-md transition-shadow cursor-pointer"
+                  >
                     <p className="font-semibold text-gray-900 text-sm mb-1">{pharmacy.name}</p>
                     <div className="flex items-center gap-3 text-xs text-gray-600">
                       <div className="flex items-center gap-1">
@@ -287,7 +314,7 @@ const DetailCard = () => {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>
@@ -301,7 +328,16 @@ const DetailCard = () => {
               </h3>
               <div className="space-y-2">
                 {nearby.ambulance_services.map((service, idx) => (
-                  <div key={idx} className="bg-red-50 p-3 rounded-xl border border-red-100 hover:shadow-md transition-shadow">
+                  <a
+                    key={idx}
+                    href={service.coordinates 
+                      ? `https://www.google.com/maps/search/?api=1&query=${service.coordinates.lat},${service.coordinates.lon}`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.name + ' ' + (service.address || ''))}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-red-50 p-3 rounded-xl border border-red-100 hover:border-red-300 hover:shadow-md transition-shadow cursor-pointer"
+                  >
                     <p className="font-semibold text-gray-900 text-sm mb-1">{service.name}</p>
                     <div className="flex items-center gap-3 text-xs text-gray-600">
                       <div className="flex items-center gap-1">
@@ -315,7 +351,7 @@ const DetailCard = () => {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>

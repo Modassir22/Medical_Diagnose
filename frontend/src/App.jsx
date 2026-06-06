@@ -10,6 +10,10 @@ import Cookies from 'js-cookie'
 import LogoutPage from './pages/AuthPage/LogoutPage'
 import Navbar from './pages/Layouts/Navbar'
 import DetailCard from './pages/Suggestion/DetailCard'
+import ExpertCall from './pages/ExpertCall/ExpertCall'
+import HistoryPage from './pages/History/AnalysisPage'
+import LanguageSelection from './pages/LanguageSelection/LanguageSelection'
+import { Agentation } from 'agentation';
 
 
 export const AuthContext = createContext();
@@ -41,7 +45,7 @@ function App() {
     const checkAuth = () => {
       const token = Cookies.get('token');
       const name = Cookies.get('name');
-      
+
       setIsAuthenticated(!!token);
       setName(name || '');
     };
@@ -53,7 +57,7 @@ function App() {
     setIsAuthenticated(true);
   };
 
-  const setDiagnosis = (data)=>{
+  const setDiagnosis = (data) => {
     setDiagnosisData(data);
   }
 
@@ -66,30 +70,46 @@ function App() {
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, name, login, logout }}>
-       <DiagnosisContext.Provider value={{ diagnosisData, setDiagnosis}}>
-      <Router>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route 
-            path='/greeting' 
-            element={
+      <DiagnosisContext.Provider value={{ diagnosisData, setDiagnosis }}>
+        <Router>
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route
+              path='/greeting'
+              element={
+                <ProtectedRoute>
+                  <h2 className='text-center text-3xl mt-20'>Hello, {name}!</h2>
+                </ProtectedRoute>
+              }
+            />
+            <Route path='/details' element={
               <ProtectedRoute>
-                <h2 className='text-center text-3xl mt-20'>Hello, {name}!</h2>
+                <DetailCard />
               </ProtectedRoute>
-            } 
-          />
-          <Route path='/details' element={
-            <ProtectedRoute>
-              <DetailCard/>
-            </ProtectedRoute>
-          }/>
-          <Route path="/register" element={<Register />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/logout" element={<LogoutPage />} />
-          <Route path="*" element={<PageNotFound />} />
-        </Routes>
-      </Router>
+            } />
+            <Route path='/analysis' element={
+              <ProtectedRoute>
+                <HistoryPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/register" element={<Register />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/logout" element={<LogoutPage />} />
+            <Route path="/language-selection" element={
+              <ProtectedRoute>
+                <LanguageSelection />
+              </ProtectedRoute>
+            } />
+            <Route path="/expert-call" element={
+              <ProtectedRoute>
+                <ExpertCall />
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={<PageNotFound />} />
+          </Routes>
+          {import.meta.env.DEV && <Agentation />}
+        </Router>
       </DiagnosisContext.Provider>
     </AuthContext.Provider>
   )
